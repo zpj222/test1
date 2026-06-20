@@ -1,0 +1,331 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>在线点单</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: #f5f5f5;
+      color: #333;
+    }
+    #app {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 16px;
+      padding-bottom: 100px;
+      background: #fff;
+      min-height: 100vh;
+    }
+    .header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 0; border-bottom: 1px solid #eee; margin-bottom: 16px;
+    }
+    .header h1 { font-size: 22px; font-weight: 700; }
+    .header .cart-badge {
+      position: relative; font-size: 20px; color: #333; cursor: pointer;
+    }
+    .header .cart-badge .badge {
+      position: absolute; top: -8px; right: -10px;
+      background: #e74c3c; color: #fff;
+      font-size: 11px; min-width: 18px; height: 18px;
+      border-radius: 9px; display: flex; align-items: center; justify-content: center;
+      font-weight: 600;
+    }
+    .categories {
+      display: flex; gap: 8px; overflow-x: auto;
+      padding-bottom: 8px; margin-bottom: 16px;
+    }
+    .categories::-webkit-scrollbar { display: none; }
+    .category-tag {
+      flex-shrink: 0; padding: 6px 16px; border-radius: 20px;
+      font-size: 14px; background: #f0f0f0; cursor: pointer;
+      transition: all 0.2s; user-select: none;
+    }
+    .category-tag.active { background: #e74c3c; color: #fff; }
+    .category-tag:hover:not(.active) { background: #e0e0e0; }
+    .menu-grid {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
+    }
+    @media (min-width: 500px) {
+      .menu-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    .menu-card {
+      background: #fff; border-radius: 12px; overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      border: 1px solid #f0f0f0; transition: transform 0.15s;
+    }
+    .menu-card:active { transform: scale(0.97); }
+    .menu-card .img-placeholder {
+      width: 100%; aspect-ratio: 1.2; background: #fafafa;
+      display: flex; align-items: center; justify-content: center;
+      color: #ccc; font-size: 36px;
+    }
+    .menu-card .info { padding: 10px 12px 12px; }
+    .menu-card .info .name {
+      font-size: 15px; font-weight: 600; margin-bottom: 4px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .menu-card .info .desc {
+      font-size: 12px; color: #999; margin-bottom: 8px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .menu-card .info .bottom {
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .menu-card .info .price { font-size: 17px; font-weight: 700; color: #e74c3c; }
+    .menu-card .info .price::before { content: "¥"; font-size: 12px; }
+    .add-btn {
+      width: 30px; height: 30px; border-radius: 50%;
+      background: #e74c3c; color: #fff; border: none; font-size: 16px;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+    }
+    .add-btn:hover { background: #c0392b; }
+    .cart-panel {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: #fff; box-shadow: 0 -2px 12px rgba(0,0,0,0.1);
+      z-index: 100; transition: transform 0.3s ease;
+    }
+    .cart-panel.minimized .cart-body { display: none; }
+    .cart-bar {
+      display: flex; align-items: center;
+      padding: 10px 16px; cursor: pointer; gap: 12px;
+    }
+    .cart-bar .cart-icon-wrap { position: relative; font-size: 24px; color: #333; }
+    .cart-bar .cart-icon-wrap .badge-lg {
+      position: absolute; top: -8px; right: -10px;
+      background: #e74c3c; color: #fff;
+      font-size: 11px; min-width: 18px; height: 18px;
+      border-radius: 9px; display: flex; align-items: center; justify-content: center;
+      font-weight: 600;
+    }
+    .cart-bar .cart-summary { flex: 1; font-size: 14px; color: #666; }
+    .cart-bar .cart-summary strong { color: #e74c3c; font-size: 18px; }
+    .cart-bar .cart-total { font-weight: 700; font-size: 18px; color: #e74c3c; }
+    .cart-bar .cart-total::before { content: "¥"; font-size: 13px; }
+    .checkout-btn {
+      padding: 8px 24px; background: #e74c3c; color: #fff;
+      border: none; border-radius: 24px; font-size: 15px; font-weight: 600; cursor: pointer;
+    }
+    .checkout-btn:hover { background: #c0392b; }
+    .checkout-btn:disabled { background: #ccc; cursor: not-allowed; }
+    .cart-body {
+      max-height: 300px; overflow-y: auto;
+      padding: 0 16px 12px; border-top: 1px solid #eee;
+    }
+    .cart-item {
+      display: flex; align-items: center;
+      padding: 8px 0; gap: 10px; border-bottom: 1px solid #f5f5f5;
+    }
+    .cart-item:last-child { border-bottom: none; }
+    .cart-item .item-name { flex: 1; font-size: 14px; font-weight: 500; }
+    .cart-item .item-price { font-size: 14px; color: #e74c3c; margin-right: 8px; }
+    .cart-item .item-price::before { content: "¥"; font-size: 11px; }
+    .cart-item .qty-ctrl { display: flex; align-items: center; gap: 8px; }
+    .cart-item .qty-ctrl button {
+      width: 26px; height: 26px; border-radius: 50%;
+      border: 1px solid #ddd; background: #fff; cursor: pointer; font-size: 14px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .cart-item .qty-ctrl button:hover { border-color: #e74c3c; color: #e74c3c; }
+    .cart-item .qty-ctrl .qty { min-width: 20px; text-align: center; font-size: 14px; }
+    .empty-state { text-align: center; padding: 60px 0; color: #ccc; }
+    .empty-state i { font-size: 48px; margin-bottom: 12px; }
+    .empty-state p { font-size: 14px; }
+    .toast {
+      position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.78); color: #fff;
+      padding: 10px 24px; border-radius: 24px; font-size: 14px;
+      z-index: 200; transition: opacity 0.3s; pointer-events: none;
+    }
+    .toast.hidden { opacity: 0; }
+    .order-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+      display: flex; align-items: center; justify-content: center; z-index: 300;
+    }
+    .order-modal {
+      background: #fff; border-radius: 16px;
+      padding: 32px 24px 24px; width: 300px; text-align: center;
+    }
+    .order-modal i { font-size: 48px; color: #27ae60; margin-bottom: 12px; }
+    .order-modal h3 { margin-bottom: 6px; font-size: 18px; }
+    .order-modal p { color: #999; font-size: 14px; margin-bottom: 20px; }
+    .order-modal button {
+      padding: 10px 40px; background: #e74c3c; color: #fff;
+      border: none; border-radius: 24px; font-size: 15px; cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="header">
+      <h1>🍽️ 在线点单</h1>
+      <div class="cart-badge" @click="toggleCart">
+        <i class="fas fa-shopping-cart"></i>
+        <span class="badge" v-if="cartCount">{{ cartCount }}</span>
+      </div>
+    </div>
+
+    <div class="categories">
+      <div v-for="cat in categories" :key="cat"
+        class="category-tag" :class="{ active: currentCategory === cat }"
+        @click="currentCategory = cat">{{ cat }}</div>
+    </div>
+
+    <div class="menu-grid" v-if="filteredItems.length">
+      <div class="menu-card" v-for="item in filteredItems" :key="item.id">
+        <div class="img-placeholder"><i class="fas fa-utensils"></i></div>
+        <div class="info">
+          <div class="name">{{ item.name }}</div>
+          <div class="desc">{{ item.desc }}</div>
+          <div class="bottom">
+            <span class="price">{{ item.price }}</span>
+            <button class="add-btn" @click="addToCart(item)">
+              <i class="fas fa-plus"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="empty-state" v-else>
+      <i class="fas fa-search"></i>
+      <p>暂无菜品</p>
+    </div>
+
+    <div class="toast" :class="{ hidden: !toastVisible }">{{ toastMsg }}</div>
+
+    <div class="cart-panel" :class="{ minimized: !cartOpen && !cartItems.length }" v-if="cartItems.length || cartOpen">
+      <div class="cart-bar" @click="cartOpen = !cartOpen">
+        <div class="cart-icon-wrap">
+          <i class="fas fa-shopping-cart"></i>
+          <span class="badge-lg" v-if="cartCount">{{ cartCount }}</span>
+        </div>
+        <div class="cart-summary" v-if="!cartItems.length">购物车为空</div>
+        <div class="cart-summary" v-else>共 <strong>{{ cartCount }}</strong> 件</div>
+        <span class="cart-total" v-if="cartTotal">{{ cartTotal }}</span>
+        <button class="checkout-btn" :disabled="!cartItems.length" @click.stop="submitOrder">去下单</button>
+      </div>
+      <div class="cart-body" v-if="cartItems.length">
+        <div class="cart-item" v-for="ci in cartItems" :key="ci.id">
+          <span class="item-name">{{ ci.name }}</span>
+          <span class="item-price">{{ ci.price }}</span>
+          <div class="qty-ctrl">
+            <button @click="decrease(ci)"><i class="fas fa-minus"></i></button>
+            <span class="qty">{{ ci.qty }}</span>
+            <button @click="increase(ci)"><i class="fas fa-plus"></i></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="order-overlay" v-if="orderSuccess">
+      <div class="order-modal">
+        <i class="fas fa-check-circle"></i>
+        <h3>下单成功！</h3>
+        <p>订单已提交，请耐心等待~</p>
+        <button @click="resetOrder">知道了</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { createApp, ref, computed } = Vue;
+
+    const MENU = [
+      { id: 1,  name: '宫保鸡丁', desc: '花生/鸡丁/干辣椒', price: 18, category: '热菜' },
+      { id: 2,  name: '麻婆豆腐', desc: '嫩豆腐/花椒/肉末', price: 12, category: '热菜' },
+      { id: 3,  name: '鱼香肉丝', desc: '木耳/笋丝/肉丝', price: 15, category: '热菜' },
+      { id: 4,  name: '回锅肉',   desc: '五花肉/蒜苗/豆瓣', price: 16, category: '热菜' },
+      { id: 5,  name: '糖醋里脊', desc: '猪里脊/番茄酱',   price: 16, category: '热菜' },
+      { id: 6,  name: '凉拌黄瓜', desc: '蒜泥/陈醋/香油',   price: 8,  category: '凉菜' },
+      { id: 7,  name: '口水鸡',   desc: '红油/芝麻/花生碎', price: 12, category: '凉菜' },
+      { id: 8,  name: '皮蛋豆腐', desc: '内酯豆腐/皮蛋',   price: 8,  category: '凉菜' },
+      { id: 9,  name: '可乐',     desc: '冰镇330ml',        price: 3,  category: '饮品' },
+      { id: 10, name: '雪碧',     desc: '冰镇330ml',        price: 3,  category: '饮品' },
+      { id: 11, name: '酸梅汤',   desc: '冰镇/生津解暑',   price: 4,  category: '饮品' },
+      { id: 12, name: '橙汁',     desc: '鲜榨/冰镇',        price: 6,  category: '饮品' },
+      { id: 13, name: '米饭',     desc: '每碗',             price: 1,  category: '主食' },
+      { id: 14, name: '蛋炒饭',   desc: '鸡蛋/葱花',        price: 8,  category: '主食' },
+      { id: 15, name: '炒面',     desc: '肉丝/青菜',        price: 8,  category: '主食' },
+      { id: 16, name: '馒头',     desc: '每份2个',          price: 3,  category: '主食' },
+    ];
+
+    const app = createApp({
+      setup() {
+        const menuItems = ref(MENU);
+        const categories = ['全部', ...new Set(MENU.map(i => i.category))];
+        const currentCategory = ref('全部');
+        const cart = ref([]);
+        const cartOpen = ref(false);
+        const toastVisible = ref(false);
+        const toastMsg = ref('');
+        const orderSuccess = ref(false);
+
+        const filteredItems = computed(() =>
+          currentCategory.value === '全部'
+            ? menuItems.value
+            : menuItems.value.filter(i => i.category === currentCategory.value)
+        );
+
+        const cartItems = computed(() => cart.value);
+        const cartCount = computed(() => cart.value.reduce((s, i) => s + i.qty, 0));
+        const cartTotal = computed(() => cart.value.reduce((s, i) => s + i.price * i.qty, 0));
+
+        function showToast(msg) {
+          toastMsg.value = msg;
+          toastVisible.value = true;
+          setTimeout(() => { toastVisible.value = false; }, 1500);
+        }
+
+        function addToCart(item) {
+          const exist = cart.value.find(c => c.id === item.id);
+          if (exist) {
+            exist.qty++;
+          } else {
+            cart.value.push({ id: item.id, name: item.name, price: item.price, qty: 1 });
+          }
+          showToast('已添加 ' + item.name);
+          cartOpen.value = true;
+        }
+
+        function increase(ci) { ci.qty++; }
+        function decrease(ci) {
+          ci.qty--;
+          if (ci.qty <= 0) {
+            cart.value = cart.value.filter(c => c.id !== ci.id);
+          }
+        }
+
+        function submitOrder() {
+          if (!cartItems.value.length) return;
+          orderSuccess.value = true;
+        }
+
+        function resetOrder() {
+          orderSuccess.value = false;
+          cart.value = [];
+          cartOpen.value = false;
+        }
+
+        function toggleCart() {
+          cartOpen.value = !cartOpen.value;
+        }
+
+        return {
+          categories, currentCategory, filteredItems,
+          cart, cartItems, cartCount, cartTotal,
+          cartOpen, toastVisible, toastMsg, orderSuccess,
+          addToCart, increase, decrease,
+          submitOrder, resetOrder, toggleCart,
+        };
+      }
+    });
+
+    app.mount('#app');
+  </script>
+</body>
+</html>
